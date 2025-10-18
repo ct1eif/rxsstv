@@ -1,74 +1,57 @@
-from flask import Flask, render_template, send_from_directory, request, abort
+from flask import Flask, request, jsonify, render_template
 import os
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
-# Diretório local onde o QSSTV guarda as imagens
-IMAGE_DIR = "/home/pi/qsstv/rx_sstv/"
+# Caminho onde as imagens são guardadas
+IMAGE_DIR = "static/rx_sstv"
 
-# Extensões de imagem permitidas
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+# Garantir que a pasta existe
+os.makedirs(IMAGE_DIR, exist_ok=True)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+# Ler chave do ambiente (definida no Render)
+UPLOAD_API_KEY = os.environ.get("UPLOAD_API_KEY")
 
-@app.route('/')
+@app.route("/")
 def index():
-    if not os.path.exists(IMAGE_DIR):
-        os.makedirs(IMAGE_DIR)
+    """Página principal - mostra as imagens guardadas"""
+    files = sorted(os.listdir(IMAGE_DIR), reverse=True)
+    image_urls = [f"/{IMAGE_DIR}/{f}" for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    return render_template("index.html", image_urls=image_urls)
 
-    images = sorted(
-        [f for f in os.listdir(IMAGE_DIR) if allowed_file(f)],
-        key=lambda x: os.path.getmtime(os.path.join(IMAGE_DIR, x)),
-        reverse=True
-    )[:20]  # Mostra apenas as 20 mais recentes
-
-    image_data = []
-    for img in images:
-        name = os.path.splitext(img)[0]
-        parts = name.split('_')
-        if len(parts) >= 3:
-            mode = parts[0]
-            dt_raw = ''.join(parts[1:])
-            datetime = (f"{dt_raw[:4]}-{dt_raw[4:6]}-{dt_raw[6:8]} "
-                        f"{dt_raw[8:10]}:{dt_raw[10:12]}:{dt_raw[12:14]}")
-        else:
-            mode = "Desconhecido"
-            datetime = "Desconhecida"
-
-        band = "20m Band"
-        image_data.append({"filename": img, "mode": mode, "datetime": datetime, "band": band})
-
-    return render_template('index.html', images=image_data)
-
-# Serve as imagens diretamente da pasta QSSTV
-@app.route('/rx_sstv/<filename>')
-def rx_sstv(filename):
-    return send_from_directory(IMAGE_DIR, filename)
-
-# Endpoint para upload externo (Render)
-@app.route('/upload', methods=['POST'])
+@app.route("/upload", methods=["POST"])
 def upload():
-    api_key = request.headers.get('X-API-KEY') or request.args.get('api_key')
-    if api_key != os.environ.get('UPLOAD_API_KEY'):
-        abort(401)
+    """Recebe upload via POST"""
+    api_key = request.headers.get("Authorization")
 
-    if 'file' not in request.files:
-        return "No file", 400
+    # 🔍 DEBUG - imprime o que o servidor recebeu e o valor esperado (para os logs do Render)
+    print("DEBUG: Header Authorization recebido -->", repr(api_key))
+    print("DEBUG: UPLOAD_API_KEY (Render) -->", repr(UPLOAD_API_KEY))
 
-    file = request.files['file']
-    if file.filename == '':
-        return "Empty filename", 400
+    # Aceita tanto "Authorization: Bearer chave" como "Authorization: chave"
+    if api_key:
+        if api_key.startswith("Bearer "):
+            api_key = api_key.split(" ", 1)[1]
 
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        dest = os.path.join(IMAGE_DIR, filename)
-        file.save(dest)
-        return "OK", 200
+    # Valida a chave
+    if api_key != UPLOAD_API_KEY:
+        print("DEBUG: Chave incorreta. Acesso negado.")
+        return "Unauthorized", 401
 
-    return "Invalid file", 400
+    # Verifica se há ficheiro
+    if "file" not in request.files:
+        return "No file part", 400
 
+    file = request.files["file"]
+    if file.filename == "":
+        return "No selected file", 400
+
+    # Guarda a imagem na pasta
+    save_path = os.path.join(IMAGE_DIR, file.filename)
+    file.save(save_path)
+    print(f"✅ Upload recebido: {file.filename}")
+
+    return jsonify({"status": "ok", "filename": file.filename})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    app.run(host="0.0.0.0", port=10000)
