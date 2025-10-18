@@ -1,57 +1,41 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 import os
 
 app = Flask(__name__)
 
-# Caminho onde as imagens são guardadas
-IMAGE_DIR = "static/rx_sstv"
+# Diretório onde as imagens são guardadas
+UPLOAD_DIR = os.path.join("static", "rx_sstv")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Garantir que a pasta existe
-os.makedirs(IMAGE_DIR, exist_ok=True)
-
-# Ler chave do ambiente (definida no Render)
-UPLOAD_API_KEY = os.environ.get("UPLOAD_API_KEY")
+# A tua chave API
+API_KEY = os.environ.get("API_KEY", "ct1eif2025")
 
 @app.route("/")
 def index():
-    """Página principal - mostra as imagens guardadas"""
-    files = sorted(os.listdir(IMAGE_DIR), reverse=True)
-    image_urls = [f"/{IMAGE_DIR}/{f}" for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    return render_template("index.html", image_urls=image_urls)
+    # lista todas as imagens da pasta
+    files = sorted(os.listdir(UPLOAD_DIR), reverse=True)
+    image_urls = [f"/static/rx_sstv/{f}" for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    return render_template("index.html", images=image_urls)
 
 @app.route("/upload", methods=["POST"])
-def upload():
-    """Recebe upload via POST"""
-    api_key = request.headers.get("Authorization")
-
-    # 🔍 DEBUG - imprime o que o servidor recebeu e o valor esperado (para os logs do Render)
-    print("DEBUG: Header Authorization recebido -->", repr(api_key))
-    print("DEBUG: UPLOAD_API_KEY (Render) -->", repr(UPLOAD_API_KEY))
-
-    # Aceita tanto "Authorization: Bearer chave" como "Authorization: chave"
-    if api_key:
-        if api_key.startswith("Bearer "):
-            api_key = api_key.split(" ", 1)[1]
-
-    # Valida a chave
-    if api_key != UPLOAD_API_KEY:
-        print("DEBUG: Chave incorreta. Acesso negado.")
+def upload_file():
+    auth = request.headers.get("Authorization")
+    if auth != API_KEY:
         return "Unauthorized", 401
 
-    # Verifica se há ficheiro
     if "file" not in request.files:
-        return "No file part", 400
+        return jsonify({"error": "no file"}), 400
 
     file = request.files["file"]
-    if file.filename == "":
-        return "No selected file", 400
-
-    # Guarda a imagem na pasta
-    save_path = os.path.join(IMAGE_DIR, file.filename)
+    save_path = os.path.join(UPLOAD_DIR, file.filename)
     file.save(save_path)
-    print(f"✅ Upload recebido: {file.filename}")
+    return jsonify({"filename": file.filename, "status": "ok"})
 
-    return jsonify({"status": "ok", "filename": file.filename})
+# Rota opcional para ver lista de imagens em JSON
+@app.route("/list")
+def list_images():
+    files = sorted(os.listdir(UPLOAD_DIR), reverse=True)
+    return jsonify(files)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=5000)
