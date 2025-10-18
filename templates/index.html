@@ -1,23 +1,81 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="utf-8">
-    <title>RX SSTV</title>
-    <style>
-        body { background: #222; color: #eee; text-align: center; font-family: sans-serif; }
-        .grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-        img { width: 220px; border-radius: 10px; box-shadow: 0 0 5px #000; }
-        h1 { margin-top: 20px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CT1EIF — SSTV Live</title>
+<style>
+body { margin:0; padding:0; background:black; color:white; font-family:'Arial Black',sans-serif; text-align:center;}
+header { display:flex; justify-content:space-between; align-items:center; padding:40px 80px 10px 80px;}
+.sstv,.live { font-size:6vw; font-weight:bold; display:flex; letter-spacing:5px; animation: colorCycle 10s infinite linear;}
+@keyframes colorCycle {0%{filter:hue-rotate(0deg);}50%{filter:hue-rotate(180deg);}100%{filter:hue-rotate(360deg);}}
+.sstv span:nth-child(1){color:red;} .sstv span:nth-child(2){color:orange;} .sstv span:nth-child(3){color:yellow;} .sstv span:nth-child(4){color:lime;}
+.live span:nth-child(1){color:cyan;} .live span:nth-child(2){color:blue;} .live span:nth-child(3){color:magenta;} .live span:nth-child(4){color:white;}
+h1{color:#007BFF;font-size:8vw;margin:0;} .info{margin-top:-10px;} .location{color:red;font-size:2vw;margin:0.5rem 0;}
+.freq{color:yellow;font-size:2.2vw;margin-bottom:2rem;} .grid{display:grid; grid-template-columns:repeat(5,1fr); gap:20px; padding:30px; justify-items:center;}
+.image-box{position:relative; width:100%; aspect-ratio:1/1; max-width:240px; border:3px solid white; overflow:hidden; border-radius:8px; background:rgba(255,255,255,0.05); transition: transform 0.3s;}
+.image-box:hover{transform:scale(1.05);} .image-box img{width:100%; height:100%; object-fit:cover; cursor:pointer;}
+.caption{position:absolute; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.6); color:white; font-size:0.9rem; padding:5px 0;}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr);}}
+.modal{display:none;position:fixed;z-index:999;padding-top:50px;left:0;top:0;width:100%;height:100%;overflow:auto;background-color:rgba(0,0,0,0.9);justify-content:center;align-items:center;}
+.modal-content{max-width:80%; max-height:80%; margin:auto; display:block;}
+.close{position:absolute; top:20px; right:45px; color:white; font-size:40px; font-weight:bold; cursor:pointer;}
+</style>
 </head>
 <body>
-    <h1>Últimas imagens SSTV recebidas</h1>
-    <div class="grid">
-        {% for img in images %}
-            <img src="{{ url_for('serve_image', filename=img) }}" alt="{{ img }}">
-        {% else %}
-            <p>Nenhuma imagem disponível.</p>
-        {% endfor %}
+
+<header>
+    <div class="sstv"><span>S</span><span>S</span><span>T</span><span>V</span></div>
+    <h1>CT1EIF</h1>
+    <div class="live"><span>L</span><span>I</span><span>V</span><span>E</span></div>
+</header>
+
+<div class="info">
+    <div class="location">Moura, Portugal — IM68gd</div>
+    <div class="freq">Imagens SSTV — ISS 145.800 MHz & 14.230 MHz</div>
+</div>
+
+<main>
+<div class="grid">
+    {% for img in images %}
+    <div class="image-box">
+        <img src="{{ img.url }}" alt="{{ img.filename }}" onclick="openModal(this)">
+        <div class="caption">{{ img.filename }}</div>
     </div>
+    {% endfor %}
+</div>
+</main>
+
+<!-- Modal -->
+<div id="myModal" class="modal">
+  <span class="close" onclick="closeModal()">&times;</span>
+  <img class="modal-content" id="modalImg">
+</div>
+
+<script>
+function openModal(element){
+    var modal = document.getElementById("myModal");
+    var modalImg = document.getElementById("modalImg");
+    modal.style.display="flex";
+    modalImg.src = element.src;
+}
+function closeModal(){
+    var modal = document.getElementById("myModal");
+    modal.style.display="none";
+}
+
+// Atualiza automaticamente a cada 10 segundos
+setInterval(function(){
+    fetch('/')
+    .then(response => response.text())
+    .then(html => {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html,'text/html');
+        var newGrid = doc.querySelector('.grid');
+        document.querySelector('.grid').innerHTML = newGrid.innerHTML;
+    });
+}, 10000);
+</script>
+
 </body>
 </html>
