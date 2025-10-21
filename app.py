@@ -3,7 +3,7 @@ import os
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
-JSON_FILE = "/home/pi/sstv_render/uploaded_images.json"  # ficheiro com URLs
+JSON_FILE = os.path.join(os.getcwd(), "uploaded_images.json")
 
 
 @app.route('/')
